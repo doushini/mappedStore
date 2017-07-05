@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * Created by luohui on 17/7/4.
@@ -73,6 +74,12 @@ public class MappedRingBufferTest {
         mappedRingBuffer.setDataFileNamePrefix("ringBufferData");
         mappedRingBuffer.setDataFileSize(100*1024*1024L);//100M
         mappedRingBuffer.load();
+    }
+
+    @Test
+    public void skipListMap() {
+        ConcurrentSkipListMap<Integer,Integer> map = new ConcurrentSkipListMap<>();
+        System.out.println(map.firstKey());
     }
 
     @Test

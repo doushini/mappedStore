@@ -79,14 +79,18 @@ public class MappedRingBufferSlot<K, V> {
         this.dataByteBuffer.put(temp, (byte) keyBuffer.length);
         temp++;
 
-        this.dataByteBuffer.put(keyBuffer);
-        temp += keyBuffer.length;
+        for (int i = 0; i < keyBuffer.length; i++) {
+            this.dataByteBuffer.put(temp, keyBuffer[i]);//这里不能直接使用put(keyBuffer)，是因为nextDataPosition里已经position到newPosition了
+            temp += 1;
+        }
 
         this.dataByteBuffer.putInt(temp, dataBuffer.length);
         temp += 4;
 
-        this.dataByteBuffer.put(dataBuffer);
-        temp += dataBuffer.length;
+        for (int i = 0; i < dataBuffer.length; i++) {
+            this.dataByteBuffer.put(temp, dataBuffer[i]);//这里不能直接使用put(keyBuffer)，是因为nextDataPosition里已经position到newPosition了
+            temp += 1;
+        }
 
         java.util.zip.CRC32 crc32 = new java.util.zip.CRC32();
         crc32.update(dataBuffer, 0, dataBuffer.length);

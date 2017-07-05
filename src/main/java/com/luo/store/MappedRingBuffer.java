@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 /**
  * Created by luohui on 17/7/4.
@@ -18,7 +19,6 @@ public class MappedRingBuffer<K, V> extends AbstractRingBuffer<K, V> {
     private short dataFileCount = 40;//等于slotCount
     private long dataFileSize = 1073741824L;
     private List<MappedRingBufferSlot<K, V>> slotList = new ArrayList<>();
-    private MappedRingBufferSlot<K, V> currentSlot;
     private int currentSlotIdx = 0;
     private MappedRingBufferMemoryIndex<K, V> memoryIndexer;
     private int indexSliceSize = 300;
@@ -78,7 +78,7 @@ public class MappedRingBuffer<K, V> extends AbstractRingBuffer<K, V> {
     }
 
     public MappedRingBufferSlot<K, V> getCurrentSlot() {
-        return currentSlot;
+        return this.slotList.get(this.currentSlotIdx);
     }
 
 
@@ -88,11 +88,19 @@ public class MappedRingBuffer<K, V> extends AbstractRingBuffer<K, V> {
 
     @Override
     public K firstKey() {
-        return this.memoryIndexer.firstKey();
+        try {
+            return this.memoryIndexer.firstKey();
+        } catch (NoSuchElementException e) {
+            return null;
+        }
     }
 
     @Override
     public K lastKey() {
-        return this.memoryIndexer.lastKey();
+        try {
+            return this.memoryIndexer.lastKey();
+        } catch (NoSuchElementException e) {
+            return null;
+        }
     }
 }

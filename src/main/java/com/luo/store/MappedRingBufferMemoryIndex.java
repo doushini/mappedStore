@@ -3,10 +3,13 @@ package com.luo.store;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Created by luohui on 17/7/4.
@@ -22,6 +25,9 @@ public class MappedRingBufferMemoryIndex<K, V> {
     private List<MappedByteBuffer> indexRecordBufferList;//每个slot都有一个MappedByteBuffer存放全量索引
     private List<Integer> indexBufferIdx;//每个slot对应的索引的id？
     private ConcurrentSkipListMap<K, MappedRingBufferIndexData> indexSliceMap = new ConcurrentSkipListMap<>();
+    private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+
+
 
     public MappedRingBufferMemoryIndex(MappedRingBuffer<K, V> ringBuffer, int slotCount, int indexBufferSize, String indexBufferDir, String indexBufferNamePrefix, int indexSliceSize) {
         this.ringBuffer = ringBuffer;
@@ -45,8 +51,54 @@ public class MappedRingBufferMemoryIndex<K, V> {
     }
 
     //追加一条索引记录，索引应该存什么？为什么每条数据都创建一个index？
-    public void writeIndexData(short slotIdx, K key, MappedRingBufferIndexData index) {
+    public void writeIndexData(short slotIdx, K key, MappedRingBufferIndexData data) {
+        int position = this.nextIndexPosition(slotIdx);
+        ByteBuffer indexBuffer = this.indexRecordBufferList.get(slotIdx);
 
+        int indexRecCount = this.getIndexRecCount(indexBuffer);
+        indexBuffer.putInt(0,indexRecCount+1);
+
+        try {
+            readWriteLock.writeLock().lock();
+            byte[] keyBuf = this.ringBuffer.getFactory().encodeKey(key);
+            for (byte b : keyBuf) {
+                indexBuffer.put(position,b);
+                position++;
+            }
+
+            indexBuffer.putShort(position,data.getSlotIndex());
+            position+=2;
+            indexBuffer.putInt(position, data.getPosition());
+            position+=4;
+            indexBuffer.putInt(position,data.getIndexRecIndex());
+
+            //等待所有索引数据都成功写入direct buffer后再更新header count，防止在direct buffer中读到不完整的索引数据
+            this.incrIndexRecCountHeader(indexBuffer);
+
+            //跳表中始终存放着第一条最后一条和没间隔slice=100的记录:[1,100,200,300...最后一个]
+            if(indexRecCount==1 || 0 == indexRecCount%indexSliceSize){
+                //nothing
+            }else{
+                //remove掉前面一个key，节省skList占用的heap内存？
+                K previousKey = this.getKey(indexBuffer,(position-this.ringBuffer.getFactory().fixedKeyLength()*2-10*2));
+                this.indexSliceMap.remove(previousKey);//不懂
+            }
+            this.indexSliceMap.put(key, data);
+        }finally {
+            readWriteLock.writeLock().unlock();
+        }
+    }
+
+    private K getKey(ByteBuffer indexBuffer, int i) {
+        return null;
+    }
+
+    private void incrIndexRecCountHeader(ByteBuffer indexBuffer) {
+
+    }
+
+    private int nextIndexPosition(short slotIdx) {
+        return 0;
     }
 
 
@@ -67,7 +119,7 @@ public class MappedRingBufferMemoryIndex<K, V> {
         int index = 0;
         for (String name : dir.list()) {
             if (name.startsWith(fileNamePattern)) {
-                int temp = Integer.valueOf(name.substring(name.lastIndexOf(".")));
+                int temp = Integer.valueOf(name.substring(name.lastIndexOf(".")+1));
                 if (temp > index) {//难道包含了slotIdx的索引文件不是唯一的吗？
                     index = temp;
                     slotFileName = name;
@@ -218,7 +270,7 @@ public class MappedRingBufferMemoryIndex<K, V> {
      * @param indexByteBuffer
      * @return
      */
-    private int getIndexRecCount(MappedByteBuffer indexByteBuffer) {
+    private int getIndexRecCount(ByteBuffer indexByteBuffer) {
         return indexByteBuffer.getInt(0);
     }
 
